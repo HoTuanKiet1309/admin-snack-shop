@@ -5,7 +5,10 @@ import { message } from 'antd';
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,13 +18,25 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (token) {
-        const response = await authService.getCurrentUser();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await authService.getCurrentUser();
+      if (response.data) {
         setUser(response.data);
+        localStorage.setItem('user', JSON.stringify(response.data));
+      } else {
+        // If no data returned, clear auth state
+        handleLogout();
       }
     } catch (err) {
       console.error('Auth check failed:', err);
-      localStorage.removeItem('token');
+      // If token is invalid or expired, clear auth state
+      if (err.response?.status === 401) {
+        handleLogout();
+      }
     } finally {
       setLoading(false);
     }
@@ -32,6 +47,7 @@ export const AuthProvider = ({ children }) => {
       const response = await authService.login(credentials);
       const { token, user } = response.data;
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));
       setUser(user);
       return { success: true, user };
     } catch (err) {
@@ -41,14 +57,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setUser(null);
+  };
+
   const logout = async () => {
     try {
       await authService.logout();
     } catch (err) {
       console.error('Logout failed:', err);
     } finally {
-      localStorage.removeItem('token');
-      setUser(null);
+      handleLogout();
     }
   };
 
