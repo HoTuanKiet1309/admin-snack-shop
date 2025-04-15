@@ -4,6 +4,7 @@ export const authService = {
   login: (credentials) => api.post('/auth/login', credentials),
   logout: () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     return Promise.resolve();
   },
   getCurrentUser: () => api.get('/auth/me'),
