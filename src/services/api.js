@@ -1,6 +1,7 @@
 import axios from 'axios';
+import { message } from 'antd';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -9,7 +10,7 @@ const api = axios.create({
   }
 });
 
-// Request interceptor for adding auth token
+// Request interceptor
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -23,15 +24,34 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for handling token expiration
+// Response interceptor
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
+    if (error.response) {
+      // Handle specific error cases
+      switch (error.response.status) {
+        case 401:
+          localStorage.removeItem('token');
+          window.location.href = '/login';
+          message.error('Phiên đăng nhập đã hết hạn');
+          break;
+        case 403:
+          message.error('Bạn không có quyền thực hiện thao tác này');
+          break;
+        case 404:
+          message.error('Không tìm thấy tài nguyên yêu cầu');
+          break;
+        case 500:
+          message.error('Lỗi server, vui lòng thử lại sau');
+          break;
+        default:
+          message.error(error.response.data.message || 'Có lỗi xảy ra');
+      }
+    } else if (error.request) {
+      message.error('Không thể kết nối đến server');
+    } else {
+      message.error('Có lỗi xảy ra');
     }
     return Promise.reject(error);
   }

@@ -1,24 +1,29 @@
-import React, { useState, useContext } from 'react';
-import { Form, Input, Button, Card, Typography, Alert, Spin } from 'antd';
+import React, { useState } from 'react';
+import { Form, Input, Button, Card, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import AuthContext from '../context/AuthContext';
-
-const { Title } = Typography;
+import { useNavigate, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const { login, error } = useContext(AuthContext);
   const [loading, setLoading] = useState(false);
+  const { login, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect if already authenticated
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   const onFinish = async (values) => {
     setLoading(true);
-    const success = await login(values.username, values.password);
-    setLoading(false);
-    if (success) {
-      navigate('/');
+    try {
+      const result = await login(values);
+      if (result.success) {
+        message.success('Đăng nhập thành công!');
+        navigate('/');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -27,45 +32,53 @@ const Login = () => {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      height: '100vh',
+      minHeight: '100vh',
       background: '#f0f2f5'
     }}>
-      <Card style={{ width: 400, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Title level={2}>Snack Shop Admin</Title>
-          <Title level={4}>{t('login')}</Title>
-        </div>
-        
-        {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
-        
-        <Spin spinning={loading}>
-          <Form
-            name="login"
-            initialValues={{ remember: true }}
-            onFinish={onFinish}
-            size="large"
+      <Card title="Đăng nhập Admin" style={{ width: 400 }}>
+        <Form
+          name="login"
+          onFinish={onFinish}
+          autoComplete="off"
+          layout="vertical"
+        >
+          <Form.Item
+            name="email"
+            rules={[
+              { required: true, message: 'Vui lòng nhập email!' },
+              { type: 'email', message: 'Email không hợp lệ!' }
+            ]}
           >
-            <Form.Item
-              name="username"
-              rules={[{ required: true, message: `${t('username')} ${t('is_required')}` }]}
+            <Input 
+              prefix={<UserOutlined />} 
+              placeholder="Email" 
+              size="large" 
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="password"
+            rules={[{ required: true, message: 'Vui lòng nhập mật khẩu!' }]}
+          >
+            <Input.Password
+              prefix={<LockOutlined />}
+              placeholder="Mật khẩu"
+              size="large"
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Button 
+              type="primary" 
+              htmlType="submit" 
+              loading={loading}
+              block
+              size="large"
             >
-              <Input prefix={<UserOutlined />} placeholder={t('username')} />
-            </Form.Item>
-            
-            <Form.Item
-              name="password"
-              rules={[{ required: true, message: `${t('password')} ${t('is_required')}` }]}
-            >
-              <Input.Password prefix={<LockOutlined />} placeholder={t('password')} />
-            </Form.Item>
-            
-            <Form.Item>
-              <Button type="primary" htmlType="submit" style={{ width: '100%' }}>
-                {t('login')}
-              </Button>
-            </Form.Item>
-          </Form>
-        </Spin>
+              Đăng nhập
+            </Button>
+          </Form.Item>
+        </Form>
       </Card>
     </div>
   );

@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import { productService } from '../services/productService';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -17,89 +17,86 @@ const { Option } = Select;
 const Products = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [searchText, setSearchText] = useState('');
-  const [filteredProducts, setFilteredProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
+
+  const categoriesList = [
+    { id: 'all', name: 'Tất cả' },
+    { id: 'banh', name: 'Bánh' },
+    { id: 'keo', name: 'Kẹo' },
+    { id: 'do_kho', name: 'Đồ khô' },
+    { id: 'mut', name: 'Mứt' },
+    { id: 'hat', name: 'Hạt' }
+  ];
 
   useEffect(() => {
     fetchProducts();
-    fetchCategories();
   }, []);
 
-  useEffect(() => {
-    filterProducts();
-  }, [searchText, selectedCategory, products]);
-
   const fetchProducts = async () => {
-    setLoading(true);
     try {
-      // Use this for actual API integration
-      // const response = await api.get('/products');
-      // setProducts(response.data);
+      setLoading(true);
+      const response = await productService.getAllProducts();
       
-      // Mock data for demonstration
-      setTimeout(() => {
-        const mockProducts = [
-          { id: 1, name: 'Bánh quy socola', price: 25000, category: 'Bánh ngọt', stock: 35, status: 'active', image: 'https://via.placeholder.com/100' },
-          { id: 2, name: 'Khoai tây chiên', price: 15000, category: 'Đồ ăn mặn', stock: 50, status: 'active', image: 'https://via.placeholder.com/100' },
-          { id: 3, name: 'Nước ngọt Coca', price: 12000, category: 'Đồ uống', stock: 78, status: 'active', image: 'https://via.placeholder.com/100' },
-          { id: 4, name: 'Bánh mì que', price: 8000, category: 'Bánh mì', stock: 42, status: 'active', image: 'https://via.placeholder.com/100' },
-          { id: 5, name: 'Snack bim bim', price: 10000, category: 'Đồ ăn mặn', stock: 65, status: 'active', image: 'https://via.placeholder.com/100' },
-          { id: 6, name: 'Trà sữa trân châu', price: 28000, category: 'Đồ uống', stock: 30, status: 'active', image: 'https://via.placeholder.com/100' },
-          { id: 7, name: 'Bánh Donut', price: 22000, category: 'Bánh ngọt', stock: 25, status: 'inactive', image: 'https://via.placeholder.com/100' },
-          { id: 8, name: 'Snack rong biển', price: 14000, category: 'Đồ ăn mặn', stock: 48, status: 'active', image: 'https://via.placeholder.com/100' },
-        ];
-        setProducts(mockProducts);
-        setFilteredProducts(mockProducts);
-        setLoading(false);
-      }, 1000);
-    } catch (err) {
-      console.error('Error fetching products:', err);
+      if (Array.isArray(response.data)) {
+        setProducts(response.data);
+      } else {
+        setProducts([]);
+        message.error('Dữ liệu không đúng định dạng');
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
       message.error('Không thể tải danh sách sản phẩm');
+      setProducts([]);
+    } finally {
       setLoading(false);
     }
   };
 
-  const fetchCategories = async () => {
-    try {
-      // Use this for actual API integration
-      // const response = await api.get('/categories');
-      // setCategories(response.data);
-      
-      // Mock data for demonstration
-      setCategories(['Bánh ngọt', 'Đồ ăn mặn', 'Đồ uống', 'Bánh mì']);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-      message.error('Không thể tải danh mục sản phẩm');
-    }
-  };
+  const getFilteredData = () => {
+    if (!Array.isArray(products)) return { data: [], total: 0 };
 
-  const filterProducts = () => {
     let filtered = [...products];
-    
+
+    // Filter by search text
     if (searchText) {
       filtered = filtered.filter(product => 
-        product.name.toLowerCase().includes(searchText.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchText.toLowerCase())
+        product.snackName.toLowerCase().includes(searchText.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchText.toLowerCase())
       );
     }
-    
-    if (selectedCategory) {
-      filtered = filtered.filter(product => product.category === selectedCategory);
+
+    // Filter by category
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(product => product.categoryId === selectedCategory);
     }
-    
-    setFilteredProducts(filtered);
+
+    // Calculate pagination
+    const { current, pageSize } = pagination;
+    const startIndex = (current - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+
+    return {
+      data: filtered.slice(startIndex, endIndex),
+      total: filtered.length
+    };
   };
 
   const handleSearch = (value) => {
     setSearchText(value);
+    setPagination(prev => ({ ...prev, current: 1 }));
   };
 
-  const handleCategoryFilter = (value) => {
+  const handleCategoryChange = (value) => {
     setSelectedCategory(value);
+    setPagination(prev => ({ ...prev, current: 1 }));
   };
 
   const handleAddProduct = () => {
@@ -112,143 +109,144 @@ const Products = () => {
 
   const handleDeleteProduct = async (id) => {
     try {
-      // Use this for actual API integration
-      // await api.delete(`/products/${id}`);
-      
-      // Mock implementation
-      setProducts(prevProducts => prevProducts.filter(product => product.id !== id));
+      await productService.deleteProduct(id);
       message.success('Xóa sản phẩm thành công');
-    } catch (err) {
-      console.error('Error deleting product:', err);
+      fetchProducts();
+    } catch (error) {
       message.error('Không thể xóa sản phẩm');
     }
   };
 
   const resetFilters = () => {
     setSearchText('');
-    setSelectedCategory(null);
+    setSelectedCategory('all');
+    setPagination(prev => ({ ...prev, current: 1 }));
   };
+
+  const handleTableChange = (newPagination) => {
+    setPagination(newPagination);
+  };
+
+  const { data: paginatedData, total } = getFilteredData();
 
   const columns = [
     {
       title: 'Hình ảnh',
-      dataIndex: 'image',
-      key: 'image',
-      render: image => <Image src={image} alt="Product" width={50} height={50} />,
+      dataIndex: 'images',
+      key: 'images',
+      render: (images) => (
+        <img 
+          src={images && images.length > 0 ? images[0] : '/placeholder.png'} 
+          alt="product" 
+          style={{ width: 50, height: 50, objectFit: 'cover' }}
+        />
+      )
     },
     {
       title: 'Tên sản phẩm',
-      dataIndex: 'name',
-      key: 'name',
-      sorter: (a, b) => a.name.localeCompare(b.name),
+      dataIndex: 'snackName',
+      key: 'snackName',
+      sorter: (a, b) => a.snackName.localeCompare(b.snackName)
     },
     {
-      title: 'Giá',
+      title: 'Mô tả',
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+    },
+    {
+      title: 'Giá gốc',
       dataIndex: 'price',
       key: 'price',
-      render: price => `${price.toLocaleString()}đ`,
-      sorter: (a, b) => a.price - b.price,
+      render: (price) => `${price.toLocaleString('vi-VN')}đ`,
+      sorter: (a, b) => a.price - b.price
     },
     {
-      title: 'Danh mục',
-      dataIndex: 'category',
-      key: 'category',
-      filters: categories.map(category => ({ text: category, value: category })),
-      onFilter: (value, record) => record.category === value,
+      title: 'Giảm giá',
+      dataIndex: 'discount',
+      key: 'discount',
+      render: (discount) => discount ? `${discount}%` : '0%'
+    },
+    {
+      title: 'Giá thực',
+      dataIndex: 'realPrice',
+      key: 'realPrice',
+      render: (realPrice) => `${realPrice.toLocaleString('vi-VN')}đ`
     },
     {
       title: 'Tồn kho',
       dataIndex: 'stock',
       key: 'stock',
-      sorter: (a, b) => a.stock - b.stock,
-      render: stock => {
-        let color = 'green';
-        if (stock <= 10) {
-          color = 'red';
-        } else if (stock <= 20) {
-          color = 'orange';
-        }
-        return <Tag color={color}>{stock}</Tag>;
-      },
+      render: (stock) => (
+        <Tag color={stock > 10 ? 'green' : 'red'}>
+          {stock}
+        </Tag>
+      )
     },
     {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: status => {
-        return (
-          <Tag color={status === 'active' ? 'green' : 'red'}>
-            {status === 'active' ? 'Hoạt động' : 'Ngừng bán'}
-          </Tag>
-        );
-      },
-      filters: [
-        { text: 'Hoạt động', value: 'active' },
-        { text: 'Ngừng bán', value: 'inactive' },
-      ],
-      onFilter: (value, record) => record.status === value,
+      title: 'Danh mục',
+      dataIndex: 'categoryId',
+      key: 'categoryId',
+      filters: categoriesList.map(category => ({ text: category.name, value: category.id })),
+      onFilter: (value, record) => record.categoryId === value,
+      render: (categoryId) => {
+        const categoryMap = {
+          'banh': 'Bánh',
+          'keo': 'Kẹo',
+          'do_kho': 'Đồ khô',
+          'mut': 'Mứt',
+          'hat': 'Hạt'
+        };
+        return categoryMap[categoryId] || categoryId;
+      }
     },
     {
-      title: 'Hành động',
+      title: 'Thao tác',
       key: 'action',
       render: (_, record) => (
-        <Space size="small">
-          <Tooltip title="Sửa">
-            <Button 
-              type="primary" 
-              shape="circle" 
-              icon={<EditOutlined />} 
-              size="small" 
-              onClick={() => handleEditProduct(record.id)}
-            />
-          </Tooltip>
-          <Tooltip title="Xóa">
-            <Popconfirm
-              title="Bạn có chắc chắn muốn xóa sản phẩm này?"
-              onConfirm={() => handleDeleteProduct(record.id)}
-              okText="Có"
-              cancelText="Không"
-            >
-              <Button type="primary" danger shape="circle" icon={<DeleteOutlined />} size="small" />
-            </Popconfirm>
-          </Tooltip>
+        <Space size="middle">
+          <Button
+            type="primary"
+            icon={<EditOutlined />}
+            onClick={() => handleEditProduct(record._id)}
+          >
+            Sửa
+          </Button>
+          <Popconfirm
+            title="Bạn có chắc chắn muốn xóa sản phẩm này?"
+            onConfirm={() => handleDeleteProduct(record._id)}
+            okText="Có"
+            cancelText="Không"
+          >
+            <Button type="primary" danger icon={<DeleteOutlined />}>
+              Xóa
+            </Button>
+          </Popconfirm>
         </Space>
-      ),
-    },
+      )
+    }
   ];
 
   return (
-    <>
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Title level={2}>{t('product_list')}</Title>
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
-            onClick={handleAddProduct}
-          >
-            Thêm sản phẩm
-          </Button>
-        </div>
-        
-        <div style={{ marginBottom: 16, display: 'flex', gap: '10px' }}>
+    <Card>
+      <Space direction="vertical" style={{ width: '100%' }} size="large">
+        <Space style={{ marginBottom: 16 }}>
           <Input
-            placeholder="Tìm kiếm sản phẩm"
+            placeholder="Tìm kiếm theo tên hoặc mô tả"
             value={searchText}
             onChange={e => handleSearch(e.target.value)}
-            style={{ width: 250 }}
+            style={{ width: 200 }}
             prefix={<SearchOutlined />}
-            allowClear
           />
           <Select
-            style={{ width: 200 }}
-            placeholder="Lọc theo danh mục"
             value={selectedCategory}
-            onChange={handleCategoryFilter}
-            allowClear
+            onChange={handleCategoryChange}
+            style={{ width: 150 }}
           >
-            {categories.map(category => (
-              <Option key={category} value={category}>{category}</Option>
+            {categoriesList.map(category => (
+              <Option key={category.id} value={category.id}>
+                {category.name}
+              </Option>
             ))}
           </Select>
           <Button 
@@ -257,17 +255,30 @@ const Products = () => {
           >
             Đặt lại
           </Button>
-        </div>
-        
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleAddProduct}
+          >
+            Thêm sản phẩm
+          </Button>
+        </Space>
+
         <Table
           columns={columns}
-          dataSource={filteredProducts}
-          rowKey="id"
+          dataSource={paginatedData}
+          rowKey="_id"
           loading={loading}
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            ...pagination,
+            total,
+            showSizeChanger: true,
+            showTotal: (total) => `Tổng ${total} sản phẩm`
+          }}
+          onChange={handleTableChange}
         />
-      </Card>
-    </>
+      </Space>
+    </Card>
   );
 };
 

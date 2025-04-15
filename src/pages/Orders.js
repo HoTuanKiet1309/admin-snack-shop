@@ -10,6 +10,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import moment from 'moment';
+import { orderService } from '../services/orderService';
 
 const { Title } = Typography;
 const { RangePicker } = DatePicker;
@@ -18,101 +19,48 @@ const { Option } = Select;
 const Orders = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [searchText, setSearchText] = useState('');
   const [dateRange, setDateRange] = useState(null);
   const [statusFilter, setStatusFilter] = useState(null);
   const [filteredOrders, setFilteredOrders] = useState([]);
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+    total: 0
+  });
 
-  useEffect(() => {
-    fetchOrders();
-  }, []);
-
-  useEffect(() => {
-    filterOrders();
-  }, [searchText, dateRange, statusFilter, orders]);
-
-  const fetchOrders = async () => {
-    setLoading(true);
+  const fetchOrders = async (page = 1) => {
     try {
-      // Mock data for demonstration
-      setTimeout(() => {
-        const mockOrders = [
-          { 
-            id: 'ORD001', 
-            customer: 'Nguyễn Văn A', 
-            phone: '0901234567',
-            date: '2025-04-10', 
-            total: 250000, 
-            status: 'completed',
-            items: 3
-          },
-          { 
-            id: 'ORD002', 
-            customer: 'Trần Thị B', 
-            phone: '0912345678',
-            date: '2025-04-11', 
-            total: 180000, 
-            status: 'processing',
-            items: 2
-          },
-          { 
-            id: 'ORD003', 
-            customer: 'Lê Văn C', 
-            phone: '0823456789',
-            date: '2025-04-12', 
-            total: 325000, 
-            status: 'pending',
-            items: 4
-          },
-          { 
-            id: 'ORD004', 
-            customer: 'Phạm Thị D', 
-            phone: '0934567890',
-            date: '2025-04-12', 
-            total: 140000, 
-            status: 'completed',
-            items: 1
-          },
-          { 
-            id: 'ORD005', 
-            customer: 'Hoàng Văn E', 
-            phone: '0845678901',
-            date: '2025-04-13', 
-            total: 195000, 
-            status: 'cancelled',
-            items: 2
-          },
-          { 
-            id: 'ORD006', 
-            customer: 'Đỗ Thị F', 
-            phone: '0956789012',
-            date: '2025-04-14', 
-            total: 230000, 
-            status: 'processing',
-            items: 3
-          },
-          { 
-            id: 'ORD007', 
-            customer: 'Vũ Văn G', 
-            phone: '0967890123',
-            date: '2025-04-14', 
-            total: 285000, 
-            status: 'pending',
-            items: 3
-          },
-        ];
-        setOrders(mockOrders);
-        setFilteredOrders(mockOrders);
-        setLoading(false);
-      }, 1000);
-    } catch (err) {
-      console.error('Error fetching orders:', err);
+      setLoading(true);
+      const params = {
+        page,
+        limit: pagination.pageSize
+      };
+
+      if (dateRange) {
+        params.startDate = dateRange[0].format('YYYY-MM-DD');
+        params.endDate = dateRange[1].format('YYYY-MM-DD');
+      }
+
+      const response = await orderService.getAllOrders(params);
+      setOrders(response.data.orders);
+      setPagination({
+        ...pagination,
+        current: page,
+        total: response.data.total
+      });
+    } catch (error) {
       message.error('Không thể tải danh sách đơn hàng');
+    } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchOrders();
+  }, [dateRange]);
 
   const filterOrders = () => {
     let filtered = [...orders];
@@ -166,87 +114,90 @@ const Orders = () => {
     message.success('Xuất file Excel thành công');
   };
 
+  const handleTableChange = (pagination) => {
+    fetchOrders(pagination.current);
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'gold';
+      case 'processing':
+        return 'blue';
+      case 'completed':
+        return 'green';
+      case 'cancelled':
+        return 'red';
+      default:
+        return 'default';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'Chờ xử lý';
+      case 'processing':
+        return 'Đang xử lý';
+      case 'completed':
+        return 'Hoàn thành';
+      case 'cancelled':
+        return 'Đã hủy';
+      default:
+        return status;
+    }
+  };
+
   const columns = [
     {
       title: 'Mã đơn hàng',
-      dataIndex: 'id',
-      key: 'id',
-      sorter: (a, b) => a.id.localeCompare(b.id),
+      dataIndex: '_id',
+      key: '_id',
+      render: (id) => `#${id.slice(-6).toUpperCase()}`
     },
     {
       title: 'Khách hàng',
-      dataIndex: 'customer',
-      key: 'customer',
-      render: (text, record) => (
-        <div>
-          <div>{text}</div>
-          <div style={{ fontSize: '12px', color: '#888' }}>{record.phone}</div>
-        </div>
-      ),
-    },
-    {
-      title: 'Ngày đặt',
-      dataIndex: 'date',
-      key: 'date',
-      render: date => moment(date).format('DD/MM/YYYY'),
-      sorter: (a, b) => moment(a.date).unix() - moment(b.date).unix(),
-    },
-    {
-      title: 'Số SP',
-      dataIndex: 'items',
-      key: 'items',
-      align: 'center',
+      dataIndex: 'user',
+      key: 'user',
+      render: (user) => user?.name || 'Khách vãng lai'
     },
     {
       title: 'Tổng tiền',
-      dataIndex: 'total',
-      key: 'total',
-      render: total => `${total.toLocaleString()}đ`,
-      sorter: (a, b) => a.total - b.total,
+      dataIndex: 'totalAmount',
+      key: 'totalAmount',
+      render: (amount) => `${amount.toLocaleString('vi-VN')}đ`
     },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      render: status => {
-        let color = 'green';
-        let text = 'Hoàn thành';
-        
-        if (status === 'pending') {
-          color = 'gold';
-          text = 'Chờ xử lý';
-        } else if (status === 'processing') {
-          color = 'blue';
-          text = 'Đang xử lý';
-        } else if (status === 'cancelled') {
-          color = 'red';
-          text = 'Đã hủy';
-        }
-        
-        return <Tag color={color}>{text}</Tag>;
-      },
-      filters: [
-        { text: 'Chờ xử lý', value: 'pending' },
-        { text: 'Đang xử lý', value: 'processing' },
-        { text: 'Hoàn thành', value: 'completed' },
-        { text: 'Đã hủy', value: 'cancelled' },
-      ],
-      onFilter: (value, record) => record.status === value,
+      render: (status) => (
+        <Tag color={getStatusColor(status)}>
+          {getStatusText(status)}
+        </Tag>
+      )
     },
     {
-      title: 'Hành động',
+      title: 'Ngày đặt',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (date) => moment(date).format('DD/MM/YYYY HH:mm')
+    },
+    {
+      title: 'Thao tác',
       key: 'action',
       render: (_, record) => (
-        <Button 
-          type="primary" 
-          size="small" 
-          icon={<EyeOutlined />} 
-          onClick={() => handleViewOrder(record.id)}
-        >
-          Xem
-        </Button>
-      ),
-    },
+        <Space size="middle">
+          <Button
+            type="primary"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/orders/${record._id}`)}
+          >
+            Chi tiết
+          </Button>
+        </Space>
+      )
+    }
   ];
 
   return (
@@ -300,10 +251,11 @@ const Orders = () => {
         
         <Table
           columns={columns}
-          dataSource={filteredOrders}
-          rowKey="id"
+          dataSource={orders}
+          rowKey="_id"
           loading={loading}
-          pagination={{ pageSize: 10 }}
+          pagination={pagination}
+          onChange={handleTableChange}
         />
       </Card>
     </>

@@ -8,7 +8,8 @@ import {
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import api from '../services/api';
+import { productService } from '../services/productService';
+import { categoryService } from '../services/categoryService';
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -24,97 +25,65 @@ const ProductForm = () => {
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
   const [categories, setCategories] = useState([]);
+  const [fileList, setFileList] = useState([]);
+  const [initialValues, setInitialValues] = useState(null);
 
   useEffect(() => {
     fetchCategories();
-    
-    if (isEditing) {
+    if (id) {
       fetchProductDetails();
     }
   }, [id]);
 
   const fetchCategories = async () => {
     try {
-      // Use this for actual API integration
-      // const response = await api.get('/categories');
-      // setCategories(response.data);
-      
-      // Mock data for demonstration
-      setCategories(['Bánh ngọt', 'Đồ ăn mặn', 'Đồ uống', 'Bánh mì']);
-    } catch (err) {
-      console.error('Error fetching categories:', err);
-      message.error('Không thể tải danh mục sản phẩm');
+      const response = await categoryService.getAllCategories();
+      if (Array.isArray(response.data)) {
+        setCategories(response.data);
+      }
+    } catch (error) {
+      message.error('Không thể tải danh sách danh mục');
     }
   };
 
   const fetchProductDetails = async () => {
-    setLoading(true);
     try {
-      // Use this for actual API integration
-      // const response = await api.get(`/products/${id}`);
-      // const productData = response.data;
-      
-      // Mock data for demonstration
-      setTimeout(() => {
-        const productData = {
-          id: id,
-          name: 'Bánh quy socola',
-          price: 25000,
-          category: 'Bánh ngọt',
-          stock: 35,
-          description: 'Bánh quy socola thơm ngon, giòn tan',
-          status: true,
-          image: 'https://via.placeholder.com/300',
-        };
-        
-        form.setFieldsValue({
-          name: productData.name,
-          price: productData.price,
-          category: productData.category,
-          stock: productData.stock,
-          description: productData.description,
-          status: productData.status,
-        });
-        
-        setImageUrl(productData.image);
-        setLoading(false);
-      }, 1000);
-    } catch (err) {
-      console.error('Error fetching product details:', err);
+      setLoading(true);
+      const response = await productService.getProductById(id);
+      const productData = response.data;
+      setInitialValues(productData);
+      form.setFieldsValue({
+        snackName: productData.snackName,
+        description: productData.description,
+        price: productData.price,
+        stock: productData.stock,
+        categoryId: productData.categoryId,
+        discount: productData.discount,
+        images: productData.images
+      });
+    } catch (error) {
       message.error('Không thể tải thông tin sản phẩm');
+    } finally {
       setLoading(false);
     }
   };
 
   const onFinish = async (values) => {
-    setLoading(true);
     try {
-      // Prepare data
-      const productData = {
-        ...values,
-        image: imageUrl || 'https://via.placeholder.com/300', // Default image if none is uploaded
-      };
-      
-      if (isEditing) {
-        // Use this for actual API integration
-        // await api.put(`/products/${id}`, productData);
-        
-        // Mock implementation
-        console.log('Updating product', id, productData);
+      setLoading(true);
+      if (id) {
+        // Update existing product
+        await productService.updateProduct(id, values);
         message.success('Cập nhật sản phẩm thành công');
       } else {
-        // Use this for actual API integration
-        // await api.post('/products', productData);
-        
-        // Mock implementation
-        console.log('Creating product', productData);
+        // Create new product
+        await productService.createProduct(values);
         message.success('Thêm sản phẩm thành công');
       }
-      
       navigate('/products');
-    } catch (err) {
-      console.error('Error saving product:', err);
-      message.error('Không thể lưu sản phẩm');
+    } catch (error) {
+      message.error(id ? 'Cập nhật sản phẩm thất bại' : 'Thêm sản phẩm thất bại');
+    } finally {
       setLoading(false);
     }
   };
@@ -152,6 +121,10 @@ const ProductForm = () => {
     navigate('/products');
   };
 
+  const handleUploadChange = ({ fileList: newFileList }) => {
+    setFileList(newFileList);
+  };
+
   return (
     <Spin spinning={loading}>
       <Card>
@@ -164,17 +137,30 @@ const ProductForm = () => {
           layout="vertical"
           onFinish={onFinish}
           initialValues={{
-            status: true,
+            discount: 0,
+            ...initialValues
           }}
         >
           <Row gutter={16}>
             <Col span={16}>
               <Form.Item
-                name="name"
+                name="snackName"
                 label="Tên sản phẩm"
-                rules={[{ required: true, message: 'Vui lòng nhập tên sản phẩm' }]}
+                rules={[
+                  { required: true, message: 'Vui lòng nhập tên sản phẩm' }
+                ]}
               >
                 <Input placeholder="Nhập tên sản phẩm" />
+              </Form.Item>
+              
+              <Form.Item
+                name="description"
+                label="Mô tả"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập mô tả sản phẩm' }
+                ]}
+              >
+                <TextArea rows={4} placeholder="Nhập mô tả sản phẩm" />
               </Form.Item>
               
               <Row gutter={16}>
@@ -182,28 +168,35 @@ const ProductForm = () => {
                   <Form.Item
                     name="price"
                     label="Giá (VNĐ)"
-                    rules={[{ required: true, message: 'Vui lòng nhập giá sản phẩm' }]}
+                    rules={[
+                      { required: true, message: 'Vui lòng nhập giá sản phẩm' },
+                      { type: 'number', min: 0, message: 'Giá phải lớn hơn 0' }
+                    ]}
                   >
                     <InputNumber 
                       min={0}
                       style={{ width: '100%' }}
                       formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                       parser={value => value.replace(/\$\s?|(,*)/g, '')}
-                      placeholder="Nhập giá"
+                      addonAfter="VNĐ"
                     />
                   </Form.Item>
                 </Col>
                 
                 <Col span={8}>
                   <Form.Item
-                    name="category"
+                    name="categoryId"
                     label="Danh mục"
-                    rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
+                    rules={[
+                      { required: true, message: 'Vui lòng chọn danh mục' }
+                    ]}
                   >
                     <Select placeholder="Chọn danh mục">
-                      {categories.map(category => (
-                        <Option key={category} value={category}>{category}</Option>
-                      ))}
+                      <Option value="banh">Bánh</Option>
+                      <Option value="keo">Kẹo</Option>
+                      <Option value="do_kho">Đồ khô</Option>
+                      <Option value="mut">Mứt</Option>
+                      <Option value="hat">Hạt</Option>
                     </Select>
                   </Form.Item>
                 </Col>
@@ -212,7 +205,10 @@ const ProductForm = () => {
                   <Form.Item
                     name="stock"
                     label="Tồn kho"
-                    rules={[{ required: true, message: 'Vui lòng nhập số lượng' }]}
+                    rules={[
+                      { required: true, message: 'Vui lòng nhập số lượng' },
+                      { type: 'number', min: 0, message: 'Số lượng phải lớn hơn hoặc bằng 0' }
+                    ]}
                   >
                     <InputNumber min={0} style={{ width: '100%' }} placeholder="Nhập số lượng" />
                   </Form.Item>
@@ -220,35 +216,44 @@ const ProductForm = () => {
               </Row>
               
               <Form.Item
-                name="description"
-                label="Mô tả"
+                name="discount"
+                label="Giảm giá (%)"
+                rules={[
+                  { type: 'number', min: 0, max: 100, message: 'Giảm giá phải từ 0-100%' }
+                ]}
               >
-                <TextArea rows={4} placeholder="Nhập mô tả sản phẩm" />
-              </Form.Item>
-              
-              <Form.Item
-                name="status"
-                label="Trạng thái"
-                valuePropName="checked"
-              >
-                <Switch checkedChildren="Hoạt động" unCheckedChildren="Ngừng bán" />
+                <InputNumber
+                  style={{ width: '100%' }}
+                  placeholder="Nhập phần trăm giảm giá"
+                  min={0}
+                  max={100}
+                />
               </Form.Item>
             </Col>
             
             <Col span={8}>
               <Form.Item
                 label="Hình ảnh sản phẩm"
-                name="image"
+                name="images"
+                rules={[
+                  { required: true, message: 'Vui lòng nhập URL hình ảnh' }
+                ]}
               >
                 <div style={{ textAlign: 'center' }}>
                   {imageUrl && <img src={imageUrl} alt="Product" style={{ width: '100%', marginBottom: 8 }} />}
                   <Upload
-                    listType="picture"
-                    showUploadList={false}
-                    customRequest={customUploadRequest}
-                    onChange={handleImageUpload}
+                    listType="picture-card"
+                    fileList={fileList}
+                    onChange={handleUploadChange}
+                    beforeUpload={() => false}
+                    multiple
                   >
-                    <Button icon={<UploadOutlined />}>Tải ảnh lên</Button>
+                    {fileList.length >= 8 ? null : (
+                      <div>
+                        <UploadOutlined />
+                        <div style={{ marginTop: 8 }}>Upload</div>
+                      </div>
+                    )}
                   </Upload>
                 </div>
               </Form.Item>
@@ -260,7 +265,7 @@ const ProductForm = () => {
               <Button onClick={handleCancel} icon={<RollbackOutlined />}>
                 Hủy
               </Button>
-              <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
+              <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>
                 {isEditing ? 'Cập nhật' : 'Thêm mới'}
               </Button>
             </div>

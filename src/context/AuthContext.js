@@ -1,68 +1,77 @@
-import React, { createContext, useState, useEffect } from 'react';
-// import api from '../services/api'; // Tạm thời comment lại
+import React, { createContext, useState, useContext, useEffect } from 'react';
+import { authService } from '../services/authService';
+import { message } from 'antd';
 
-export const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const token = localStorage.getItem('token');
-    if (token) {
-      // Thay vì gọi API, chúng ta sẽ set một user giả lập
-      setUser({ name: 'Admin', email: 'admin@snackshop.com' });
-      setLoading(false);
-    } else {
-      setLoading(false);
-    }
+    checkAuth();
   }, []);
 
-  // Thay thế bằng phiên bản giả lập để development
-  const fetchUserProfile = async () => {
-    // Simulate API call
-    setTimeout(() => {
-      setUser({ name: 'Admin', email: 'admin@snackshop.com' });
-      setLoading(false);
-    }, 500);
-  };
-
-  const login = async (username, password) => {
+  const checkAuth = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      // Kiểm tra thông tin đăng nhập trực tiếp
-      if (username === 'admin' && password === 'admin') {
-        // Giả lập API thành công
-        localStorage.setItem('token', 'mock-jwt-token-for-admin');
-        await fetchUserProfile();
-        return true;
-      } else {
-        // Giả lập API thất bại
-        setError('Tên đăng nhập hoặc mật khẩu không đúng');
-        setLoading(false);
-        return false;
+      const token = localStorage.getItem('token');
+      if (token) {
+        const response = await authService.getCurrentUser();
+        setUser(response.data);
       }
     } catch (err) {
-      setError('Đăng nhập thất bại');
+      console.error('Auth check failed:', err);
+      localStorage.removeItem('token');
+    } finally {
       setLoading(false);
-      return false;
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setUser(null);
+  const login = async (credentials) => {
+    try {
+      const response = await authService.login(credentials);
+      const { token, user } = response.data;
+      localStorage.setItem('token', token);
+      setUser(user);
+      return { success: true, user };
+    } catch (err) {
+      console.error('Login failed:', err);
+      message.error(err.response?.data?.message || 'Đăng nhập thất bại');
+      return { success: false, error: err.message };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await authService.logout();
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      localStorage.removeItem('token');
+      setUser(null);
+    }
+  };
+
+  const value = {
+    user,
+    login,
+    logout,
+    loading,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin'
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export default AuthContext;
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

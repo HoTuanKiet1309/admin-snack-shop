@@ -1,11 +1,11 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
 import viVN from 'antd/lib/locale/vi_VN';
 import './i18n';
 
 // Contexts
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Pages
 import Login from './pages/Login';
@@ -13,13 +13,29 @@ import MainLayout from './components/layouts/MainLayout';
 import Dashboard from './pages/Dashboard';
 import Products from './pages/Products';
 import ProductForm from './pages/ProductForm';
+import Users from './pages/Users';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  if (!token) {
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh' 
+      }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
+
   return children;
 };
 
@@ -42,6 +58,7 @@ function App() {
               <Route path="/products" element={<Products />} />
               <Route path="/products/add" element={<ProductForm />} />
               <Route path="/products/edit/:id" element={<ProductForm />} />
+              <Route path="/users" element={<Users />} />
             </Route>
           </Routes>
         </Router>
