@@ -5,10 +5,10 @@ import {
 } from 'antd';
 import { 
   PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, 
-  ReloadOutlined, FilterOutlined
+  ReloadOutlined, FilterOutlined, PictureOutlined
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { productService } from '../services/productService';
 
 const { Title } = Typography;
@@ -17,6 +17,7 @@ const { Option } = Select;
 const Products = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [searchText, setSearchText] = useState('');
@@ -38,7 +39,14 @@ const Products = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, []);
+    
+    // Kiểm tra tham số refresh trong URL
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('refresh') === 'true') {
+      // Xóa tham số refresh khỏi URL
+      navigate('/products', { replace: true });
+    }
+  }, [location]);
 
   const fetchProducts = async () => {
     try {
@@ -46,7 +54,10 @@ const Products = () => {
       const response = await productService.getAllProducts();
       
       if (Array.isArray(response.data)) {
+        // Log dữ liệu để debug
+        console.log('Products data:', response.data);
         setProducts(response.data);
+        setPagination(prev => ({ ...prev, total: response.data.length }));
       } else {
         setProducts([]);
         message.error('Dữ liệu không đúng định dạng');
@@ -134,12 +145,20 @@ const Products = () => {
       title: 'Hình ảnh',
       dataIndex: 'images',
       key: 'images',
+      width: 100,
       render: (images) => (
-        <img 
-          src={images && images.length > 0 ? images[0] : '/placeholder.png'} 
-          alt="product" 
-          style={{ width: 50, height: 50, objectFit: 'cover' }}
-        />
+        images && images.length > 0 ? (
+          <Image
+            src={images[0]}
+            alt="product"
+            style={{ width: 50, height: 50, objectFit: 'cover' }}
+            preview={false}
+          />
+        ) : (
+          <div style={{ width: 50, height: 50, backgroundColor: '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <PictureOutlined />
+          </div>
+        )
       )
     },
     {

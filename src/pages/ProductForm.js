@@ -4,12 +4,18 @@ import {
   Upload, Card, Typography, message, Spin, Row, Col
 } from 'antd';
 import { 
-  UploadOutlined, SaveOutlined, RollbackOutlined, PlusOutlined 
+  UploadOutlined, SaveOutlined, RollbackOutlined, PlusOutlined,
+  DeleteOutlined 
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { productService } from '../services/productService';
 import { categoryService } from '../services/categoryService';
+import { Cloudinary } from 'cloudinary-react';
+
+// Cloudinary configuration
+const cloudName = 'dbyquwzjy';
+const uploadPreset = 'snack_shop_preset'; // Thay thế bằng tên preset mới bạn vừa tạo
 
 const { Title } = Typography;
 const { Option } = Select;
@@ -52,6 +58,12 @@ const ProductForm = () => {
       const response = await productService.getProductById(id);
       const productData = response.data;
       setInitialValues(productData);
+      
+      // Set imageUrl từ images của sản phẩm nếu có
+      if (productData.images && productData.images.length > 0) {
+        setImageUrl(productData.images[0]);
+      }
+      
       form.setFieldsValue({
         snackName: productData.snackName,
         description: productData.description,
@@ -71,50 +83,82 @@ const ProductForm = () => {
   const onFinish = async (values) => {
     try {
       setLoading(true);
+      
+      if (!imageUrl) {
+        message.error('Vui lòng upload ảnh sản phẩm');
+        return;
+      }
+
+      // Tạo object dữ liệu sản phẩm
+      const productData = {
+        ...values,
+        images: [imageUrl] // Luôn sử dụng imageUrl hiện tại
+      };
+
+      console.log('Product data to submit:', productData); // Thêm log để debug
+
       if (id) {
-        // Update existing product
-        await productService.updateProduct(id, values);
+        await productService.updateProduct(id, productData);
         message.success('Cập nhật sản phẩm thành công');
       } else {
-        // Create new product
-        await productService.createProduct(values);
+        await productService.createProduct(productData);
         message.success('Thêm sản phẩm thành công');
       }
-      navigate('/products');
+      
+      // Chuyển trang với tham số refresh=true
+      navigate('/products?refresh=true');
     } catch (error) {
       message.error(id ? 'Cập nhật sản phẩm thất bại' : 'Thêm sản phẩm thất bại');
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleImageUpload = (info) => {
-    if (info.file.status === 'done') {
-      // When using actual API
-      // setImageUrl(info.file.response.url);
+  const handleImageUpload = async (info) => {
+    try {
+      const { status, originFileObj } = info.file;
       
-      // Mock implementation
-      getBase64(info.file.originFileObj, url => {
-        setImageUrl(url);
-      });
-      message.success('Tải ảnh lên thành công');
-    } else if (info.file.status === 'error') {
+      if (status === 'uploading') {
+        return;
+      }
+
+      if (status === 'error') {
+        message.error('Tải ảnh lên thất bại');
+        return;
+      }
+
+      if (status === 'done' || originFileObj) {
+        const formData = new FormData();
+        formData.append('file', originFileObj);
+        formData.append('upload_preset', uploadPreset);
+
+        setLoading(true);
+        const response = await fetch(
+          `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
+
+        const data = await response.json();
+        if (data.secure_url) {
+          setImageUrl(data.secure_url);
+          form.setFieldsValue({
+            images: [data.secure_url]
+          });
+          message.success('Tải ảnh lên thành công');
+        } else {
+          throw new Error('Upload failed');
+        }
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
       message.error('Tải ảnh lên thất bại');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  // Helper function to convert file to base64
-  const getBase64 = (file, callback) => {
-    const reader = new FileReader();
-    reader.addEventListener('load', () => callback(reader.result));
-    reader.readAsDataURL(file);
-  };
-
-  // Mock implementation for file upload
-  const customUploadRequest = ({ onSuccess }) => {
-    setTimeout(() => {
-      onSuccess("ok");
-    }, 1000);
   };
 
   const handleCancel = () => {
@@ -123,6 +167,22 @@ const ProductForm = () => {
 
   const handleUploadChange = ({ fileList: newFileList }) => {
     setFileList(newFileList);
+  };
+
+  // Thêm hàm normFile
+  const normFile = (e) => {
+    if (Array.isArray(e)) {
+      return e;
+    }
+    return e?.fileList;
+  };
+
+  const handleDeleteImage = () => {
+    setImageUrl('');
+    form.setFieldsValue({
+      images: []
+    });
+    message.success('Đã xóa ảnh');
   };
 
   return (
@@ -233,29 +293,61 @@ const ProductForm = () => {
             
             <Col span={8}>
               <Form.Item
-                label="Hình ảnh sản phẩm"
-                name="images"
-                rules={[
-                  { required: true, message: 'Vui lòng nhập URL hình ảnh' }
-                ]}
+                label="Ảnh sản phẩm"
+                name="image"
+                rules={[{ required: true, message: 'Vui lòng upload ảnh sản phẩm' }]}
               >
-                <div style={{ textAlign: 'center' }}>
-                  {imageUrl && <img src={imageUrl} alt="Product" style={{ width: '100%', marginBottom: 8 }} />}
-                  <Upload
-                    listType="picture-card"
-                    fileList={fileList}
-                    onChange={handleUploadChange}
-                    beforeUpload={() => false}
-                    multiple
-                  >
-                    {fileList.length >= 8 ? null : (
-                      <div>
-                        <UploadOutlined />
-                        <div style={{ marginTop: 8 }}>Upload</div>
+                <Upload
+                  name="file"
+                  listType="picture-card"
+                  className="avatar-uploader"
+                  showUploadList={false}
+                  action={`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`}
+                  data={{
+                    upload_preset: uploadPreset
+                  }}
+                  onChange={handleImageUpload}
+                >
+                  {imageUrl ? (
+                    <div style={{ position: 'relative' }}>
+                      <img 
+                        src={imageUrl} 
+                        alt="product" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          background: 'rgba(0, 0, 0, 0.5)',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          opacity: 0,
+                          transition: 'opacity 0.3s',
+                          cursor: 'pointer',
+                          ':hover': {
+                            opacity: 1
+                          }
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteImage();
+                        }}
+                      >
+                        <DeleteOutlined style={{ color: '#fff', fontSize: '20px' }} />
                       </div>
-                    )}
-                  </Upload>
-                </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <PlusOutlined />
+                      <div style={{ marginTop: 8 }}>Upload</div>
+                    </div>
+                  )}
+                </Upload>
               </Form.Item>
             </Col>
           </Row>
@@ -275,5 +367,14 @@ const ProductForm = () => {
     </Spin>
   );
 };
+
+// Thêm CSS cho hover effect
+const style = document.createElement('style');
+style.innerHTML = `
+  .avatar-uploader .ant-upload:hover .delete-overlay {
+    opacity: 1 !important;
+  }
+`;
+document.head.appendChild(style);
 
 export default ProductForm;
