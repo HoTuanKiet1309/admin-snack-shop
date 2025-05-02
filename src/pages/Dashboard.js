@@ -60,12 +60,12 @@ const Dashboard = () => {
   const topProductColumns = [
     {
       title: 'Sản phẩm',
-      dataIndex: 'name',
-      key: 'name',
+      dataIndex: 'snackName',
+      key: 'snackName',
     },
     {
       title: 'Đã bán',
-      dataIndex: 'soldCount',
+      dataIndex: 'quantity',
       key: 'soldCount',
       render: (soldCount) => soldCount || 0
     },
@@ -86,9 +86,28 @@ const Dashboard = () => {
     },
     {
       title: 'Khách hàng',
-      dataIndex: 'user',
-      key: 'user',
-      render: (user) => user?.name || 'Khách vãng lai'
+      dataIndex: 'userId',
+      key: 'userId',
+      render: (user, record) => {
+        if (!user) return 'Khách vãng lai';
+        
+        // Kiểm tra nếu user là string (ID) thay vì object
+        if (typeof user === 'string') {
+          return 'Đang tải...';
+        }
+        
+        // Hiển thị họ tên đầy đủ nếu có
+        if (user.firstName && user.lastName) {
+          return `${user.lastName} ${user.firstName}`;
+        }
+        
+        // Fallback to email if no name
+        if (user.email) {
+          return user.email;
+        }
+        
+        return 'Khách vãng lai';
+      },
     },
     {
       title: 'Tổng tiền',
@@ -98,13 +117,14 @@ const Dashboard = () => {
     },
     {
       title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
+      dataIndex: 'orderStatus',
+      key: 'orderStatus',
       render: (status) => {
         const statusMap = {
           'pending': { color: 'gold', text: 'Chờ xử lý' },
           'processing': { color: 'blue', text: 'Đang xử lý' },
-          'completed': { color: 'green', text: 'Hoàn thành' },
+          'shipping': { color: 'purple', text: 'Đang giao hàng' },
+          'delivered': { color: 'green', text: 'Hoàn thành' },
           'cancelled': { color: 'red', text: 'Đã hủy' }
         };
         const { color, text } = statusMap[status] || { color: 'default', text: status };
@@ -172,7 +192,7 @@ const Dashboard = () => {
           <Card title="Đơn hàng gần đây">
             <Table
               columns={recentOrderColumns}
-              dataSource={recentOrders}
+              dataSource={recentOrders.slice(0, 5)}
               rowKey="_id"
               pagination={false}
               loading={loading}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Table, Card, Input, Button, Space, Tag, Typography, 
-  DatePicker, Select, message
+  DatePicker, Select, message, Popconfirm
 } from 'antd';
 import { 
   SearchOutlined, EyeOutlined, FileExcelOutlined,
@@ -17,6 +17,8 @@ const { RangePicker } = DatePicker;
 const { Option } = Select;
 
 const Orders = () => {
+  console.log('Orders component rendered'); // Debug log
+
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -24,35 +26,32 @@ const Orders = () => {
   const [searchText, setSearchText] = useState('');
   const [dateRange, setDateRange] = useState(null);
   const [statusFilter, setStatusFilter] = useState(null);
-  const [filteredOrders, setFilteredOrders] = useState([]);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 10,
-    total: 0
+    total: 0,
+    showSizeChanger: true,
+    showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} đơn hàng`
   });
 
-  const fetchOrders = async (page = 1) => {
+  const fetchOrders = async () => {
     try {
+      console.log('Fetching orders...'); // Debug log
       setLoading(true);
-      const params = {
-        page,
-        limit: pagination.pageSize
-      };
-
-      if (dateRange) {
-        params.startDate = dateRange[0].format('YYYY-MM-DD');
-        params.endDate = dateRange[1].format('YYYY-MM-DD');
+      const response = await orderService.getAllOrders();
+      console.log('Orders response:', response); // Debug log
+      if (response && response.data) {
+        setOrders(response.data);
+        setPagination(prev => ({
+          ...prev,
+          total: response.data.length
+        }));
+      } else {
+        throw new Error('Invalid response format');
       }
-
-      const response = await orderService.getAllOrders(params);
-      setOrders(response.data.orders);
-      setPagination({
-        ...pagination,
-        current: page,
-        total: response.data.total
-      });
     } catch (error) {
-      message.error('Không thể tải danh sách đơn hàng');
+      console.error('Error fetching orders:', error); // Debug log
+      message.error(error.response?.data?.message || 'Không thể tải danh sách đơn hàng');
     } finally {
       setLoading(false);
     }
@@ -60,62 +59,16 @@ const Orders = () => {
 
   useEffect(() => {
     fetchOrders();
-  }, [dateRange]);
+  }, []);
 
-  const filterOrders = () => {
-    let filtered = [...orders];
-    
-    if (searchText) {
-      filtered = filtered.filter(order => 
-        order.id.toLowerCase().includes(searchText.toLowerCase()) ||
-        order.customer.toLowerCase().includes(searchText.toLowerCase()) ||
-        order.phone.includes(searchText)
-      );
+  const handleStatusUpdate = async (orderId, newStatus) => {
+    try {
+      await orderService.updateOrderStatus(orderId, newStatus);
+      message.success('Cập nhật trạng thái thành công');
+      fetchOrders();
+    } catch (error) {
+      message.error('Cập nhật trạng thái thất bại');
     }
-    
-    if (dateRange) {
-      const [startDate, endDate] = dateRange;
-      filtered = filtered.filter(order => {
-        const orderDate = moment(order.date);
-        return orderDate.isBetween(startDate, endDate, 'day', '[]');
-      });
-    }
-    
-    if (statusFilter) {
-      filtered = filtered.filter(order => order.status === statusFilter);
-    }
-    
-    setFilteredOrders(filtered);
-  };
-
-  const handleSearch = (value) => {
-    setSearchText(value);
-  };
-
-  const handleDateRangeChange = (dates) => {
-    setDateRange(dates);
-  };
-
-  const handleStatusFilter = (value) => {
-    setStatusFilter(value);
-  };
-
-  const handleViewOrder = (id) => {
-    navigate(`/orders/${id}`);
-  };
-
-  const resetFilters = () => {
-    setSearchText('');
-    setDateRange(null);
-    setStatusFilter(null);
-  };
-
-  const exportToExcel = () => {
-    message.success('Xuất file Excel thành công');
-  };
-
-  const handleTableChange = (pagination) => {
-    fetchOrders(pagination.current);
   };
 
   const getStatusColor = (status) => {
@@ -124,7 +77,9 @@ const Orders = () => {
         return 'gold';
       case 'processing':
         return 'blue';
-      case 'completed':
+      case 'shipping':
+        return 'purple';
+      case 'delivered':
         return 'green';
       case 'cancelled':
         return 'red';
@@ -139,13 +94,91 @@ const Orders = () => {
         return 'Chờ xử lý';
       case 'processing':
         return 'Đang xử lý';
-      case 'completed':
-        return 'Hoàn thành';
+      case 'shipping':
+        return 'Đang giao hàng';
+      case 'delivered':
+        return 'Đã giao hàng';
       case 'cancelled':
         return 'Đã hủy';
       default:
         return status;
     }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      setLoading(true);
+      const response = await orderService.exportOrders();
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `orders-${moment().format('YYYY-MM-DD')}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      message.success('Xuất file Excel thành công');
+    } catch (error) {
+      message.error('Xuất file Excel thất bại');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getFilteredOrders = () => {
+    let filtered = [...orders];
+
+    if (searchText) {
+      const searchLower = searchText.toLowerCase();
+      filtered = filtered.filter(order => {
+        // Tìm theo mã đơn hàng
+        const orderIdMatch = order._id.toLowerCase().includes(searchLower);
+        
+        // Tìm theo thông tin khách hàng
+        const user = order.userId;
+        if (!user) return orderIdMatch;
+
+        // Tìm theo email
+        const emailMatch = user.email?.toLowerCase().includes(searchLower);
+
+        // Tìm theo họ tên đầy đủ
+        const fullName = user.firstName && user.lastName 
+          ? `${user.lastName} ${user.firstName}`.toLowerCase()
+          : '';
+        const fullNameMatch = fullName.includes(searchLower);
+
+        // Tìm theo từng phần của tên
+        const firstNameMatch = user.firstName?.toLowerCase().includes(searchLower);
+        const lastNameMatch = user.lastName?.toLowerCase().includes(searchLower);
+
+        return orderIdMatch || emailMatch || fullNameMatch || firstNameMatch || lastNameMatch;
+      });
+    }
+
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      filtered = filtered.filter(order => {
+        const orderDate = moment(order.orderDate);
+        return orderDate.isBetween(dateRange[0], dateRange[1], 'day', '[]');
+      });
+    }
+
+    if (statusFilter) {
+      filtered = filtered.filter(order => order.orderStatus === statusFilter);
+    }
+
+    return filtered;
+  };
+
+  const handleTableChange = (newPagination, filters, sorter) => {
+    setPagination(prev => ({
+      ...prev,
+      ...newPagination
+    }));
+  };
+
+  const getPageData = (data) => {
+    const startIndex = (pagination.current - 1) * pagination.pageSize;
+    const endIndex = startIndex + pagination.pageSize;
+    return data.slice(startIndex, endIndex);
   };
 
   const columns = [
@@ -157,31 +190,79 @@ const Orders = () => {
     },
     {
       title: 'Khách hàng',
-      dataIndex: 'user',
-      key: 'user',
-      render: (user) => user?.name || 'Khách vãng lai'
+      dataIndex: 'userId',
+      key: 'userId',
+      render: (user, record) => {
+        if (!user) return 'Khách vãng lai';
+        
+        // Kiểm tra nếu user là string (ID) thay vì object
+        if (typeof user === 'string') {
+          return 'Đang tải...';
+        }
+        
+        // Hiển thị họ tên đầy đủ nếu có
+        if (user.firstName && user.lastName) {
+          return `${user.lastName} ${user.firstName}`;
+        }
+        
+        // Fallback to email if no name
+        if (user.email) {
+          return user.email;
+        }
+        
+        return 'Khách vãng lai';
+      },
+      sorter: (a, b) => {
+        const nameA = a.userId?.lastName ? `${a.userId.lastName} ${a.userId.firstName}` : '';
+        const nameB = b.userId?.lastName ? `${b.userId.lastName} ${b.userId.firstName}` : '';
+        return nameA.localeCompare(nameB);
+      }
     },
     {
       title: 'Tổng tiền',
       dataIndex: 'totalAmount',
       key: 'totalAmount',
-      render: (amount) => `${amount.toLocaleString('vi-VN')}đ`
+      render: (amount) => `${amount?.toLocaleString('vi-VN')}đ`,
+      sorter: (a, b) => a.totalAmount - b.totalAmount
     },
     {
       title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => (
-        <Tag color={getStatusColor(status)}>
-          {getStatusText(status)}
-        </Tag>
-      )
+      dataIndex: 'orderStatus',
+      key: 'orderStatus',
+      render: (status, record) => (
+        <Space>
+          <Tag color={getStatusColor(status)}>
+            {getStatusText(status)}
+          </Tag>
+        
+            <Select
+              defaultValue={status}
+              style={{ width: 140 }}
+              onChange={(value) => handleStatusUpdate(record._id, value)}
+            >
+              <Option value="pending">Chờ xử lý</Option>
+              <Option value="processing">Đang xử lý</Option>
+              <Option value="shipping">Đang giao hàng</Option>
+              <Option value="delivered">Đã giao hàng</Option>
+              <Option value="cancelled">Đã hủy</Option>
+            </Select>
+        </Space>
+      ),
+      filters: [
+        { text: 'Chờ xử lý', value: 'pending' },
+        { text: 'Đang xử lý', value: 'processing' },
+        { text: 'Đang giao hàng', value: 'shipping' },
+        { text: 'Đã giao hàng', value: 'delivered' },
+        { text: 'Đã hủy', value: 'cancelled' }
+      ],
+      onFilter: (value, record) => record.orderStatus === value
     },
     {
       title: 'Ngày đặt',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (date) => moment(date).format('DD/MM/YYYY HH:mm')
+      dataIndex: 'orderDate',
+      key: 'orderDate',
+      render: (date) => moment(date).format('DD/MM/YYYY HH:mm'),
+      sorter: (a, b) => moment(a.orderDate).unix() - moment(b.orderDate).unix()
     },
     {
       title: 'Thao tác',
@@ -200,65 +281,84 @@ const Orders = () => {
     }
   ];
 
+  const filteredOrders = getFilteredOrders();
+  const currentPageData = getPageData(filteredOrders);
+
   return (
-    <>
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Title level={2}>{t('orders')}</Title>
-          <Button 
-            type="primary" 
-            icon={<FileExcelOutlined />} 
-            onClick={exportToExcel}
-          >
-            Xuất Excel
-          </Button>
-        </div>
-        
-        <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          <Input
-            placeholder="Tìm kiếm theo mã, tên KH, SĐT"
-            value={searchText}
-            onChange={e => handleSearch(e.target.value)}
-            style={{ width: 250 }}
-            prefix={<SearchOutlined />}
-            allowClear
-          />
-          <RangePicker 
-            value={dateRange}
-            onChange={handleDateRangeChange}
-            format="DD/MM/YYYY"
-            placeholder={['Từ ngày', 'Đến ngày']}
-          />
-          <Select
-            style={{ width: 150 }}
-            placeholder="Trạng thái"
-            value={statusFilter}
-            onChange={handleStatusFilter}
-            allowClear
-          >
-            <Option value="pending">Chờ xử lý</Option>
-            <Option value="processing">Đang xử lý</Option>
-            <Option value="completed">Hoàn thành</Option>
-            <Option value="cancelled">Đã hủy</Option>
-          </Select>
-          <Button 
-            icon={<ReloadOutlined />} 
-            onClick={resetFilters}
-          >
-            Đặt lại
-          </Button>
-        </div>
-        
-        <Table
-          columns={columns}
-          dataSource={orders}
-          rowKey="_id"
+    <Card>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Title level={2}>Quản lý đơn hàng</Title>
+        <Button 
+          type="primary" 
+          icon={<FileExcelOutlined />} 
+          onClick={handleExportExcel}
           loading={loading}
-          pagination={pagination}
-          onChange={handleTableChange}
+        >
+          Xuất Excel
+        </Button>
+      </div>
+      
+      <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+        <Input
+          placeholder="Tìm kiếm theo mã đơn hàng, tên khách hàng"
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          style={{ width: 300 }}
+          prefix={<SearchOutlined />}
+          allowClear
         />
-      </Card>
-    </>
+        <RangePicker 
+          value={dateRange}
+          onChange={setDateRange}
+          format="DD/MM/YYYY"
+          placeholder={['Từ ngày', 'Đến ngày']}
+        />
+        <Select
+          style={{ width: 150 }}
+          placeholder="Trạng thái"
+          value={statusFilter}
+          onChange={setStatusFilter}
+          allowClear
+        >
+          <Option value="pending">Chờ xử lý</Option>
+          <Option value="processing">Đang xử lý</Option>
+          <Option value="shipping">Đang giao hàng</Option>
+          <Option value="delivered">Đã giao hàng</Option>
+          <Option value="cancelled">Đã hủy</Option>
+        </Select>
+        <Button 
+          icon={<ReloadOutlined />} 
+          onClick={() => {
+            setSearchText('');
+            setDateRange(null);
+            setStatusFilter(null);
+          }}
+        >
+          Đặt lại
+        </Button>
+      </div>
+
+      <Table
+        columns={columns}
+        dataSource={currentPageData}
+        rowKey="_id"
+        pagination={{
+          ...pagination,
+          total: filteredOrders.length,
+          pageSize: pagination.pageSize,
+          current: pagination.current,
+          onChange: (page, pageSize) => {
+            setPagination(prev => ({
+              ...prev,
+              current: page,
+              pageSize: pageSize
+            }));
+          }
+        }}
+        onChange={handleTableChange}
+        loading={loading}
+      />
+    </Card>
   );
 };
 

@@ -1,14 +1,14 @@
 import api from './api';
 
 export const orderService = {
-  getAllOrders: (params) => api.get('/orders', { params }),
+  getAllOrders: () => api.get('/orders/all'),
   getOrderById: (id) => api.get(`/orders/${id}`),
-  updateOrderStatus: (id, status) => api.put(`/orders/${id}/status`, { status }),
+  updateOrderStatus: (id, status) => api.put(`/orders/${id}`, { status }),
   deleteOrder: (id) => api.delete(`/orders/${id}`),
-  getOrdersByUser: (userId) => api.get(`/order/user/${userId}`),
-  getOrderStatistics: (params) => api.get('/order/statistics', { params }),
-  exportOrders: (params) => api.get('/order/export', { 
-    params,
+  getOrdersByUser: (userId) => api.get(`/orders/user/${userId}`),
+  getOrderStatistics: () => api.get('/orders/statistics'),
+  getCompletedOrdersStatistics: () => api.get('/orders/statistics/completed'),
+  exportOrders: () => api.get('/orders/export', { 
     responseType: 'blob'
   })
 }; 

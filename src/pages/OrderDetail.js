@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card, Descriptions, Table, Tag, Button, Steps, Divider,
-  Typography, Row, Col, Statistic, Space, message, Modal, Select
+  Typography, Row, Col, Statistic, Space, message, Modal, Select, Popconfirm
 } from 'antd';
 import {
   ShoppingOutlined, CheckCircleOutlined, ClockCircleOutlined, 
-  CloseCircleOutlined, RollbackOutlined, PrinterOutlined
+  CloseCircleOutlined, RollbackOutlined, PrinterOutlined,
+  ArrowLeftOutlined, UserOutlined, EnvironmentOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import moment from 'moment';
+import { orderService } from '../services/orderService';
+import { formatPrice } from '../utils/format';
 
 const { Title, Text } = Typography;
 const { Step } = Steps;
@@ -21,6 +24,7 @@ const OrderDetail = () => {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState(null);
+  const [error, setError] = useState(null);
   const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
   const [newStatus, setNewStatus] = useState('');
 
@@ -29,57 +33,25 @@ const OrderDetail = () => {
   }, [id]);
 
   const fetchOrderDetails = async () => {
-    setLoading(true);
     try {
-      // Mock data for demonstration
-      setTimeout(() => {
-        const mockOrder = {
-          id: id,
-          date: '2025-04-12',
-          status: 'processing',
-          customer: {
-            name: 'Trần Thị B',
-            phone: '0912345678',
-            email: 'trantb@example.com',
-            address: '123 Nguyễn Huệ, Quận 1, TP.HCM'
-          },
-          paymentMethod: 'COD',
-          paymentStatus: 'pending',
-          shippingFee: 15000,
-          subtotal: 165000,
-          total: 180000,
-          notes: 'Giao hàng trong giờ hành chính',
-          statusHistory: [
-            { status: 'pending', date: '2025-04-12 09:23:15', text: 'Đơn hàng đã được tạo' },
-            { status: 'processing', date: '2025-04-12 10:45:30', text: 'Đơn hàng đang được xử lý' }
-          ],
-          items: [
-            { id: 1, name: 'Bánh quy socola', price: 25000, quantity: 2, total: 50000, image: 'https://via.placeholder.com/80' },
-            { id: 2, name: 'Khoai tây chiên', price: 15000, quantity: 3, total: 45000, image: 'https://via.placeholder.com/80' },
-            { id: 3, name: 'Nước ngọt Coca', price: 12000, quantity: 2, total: 24000, image: 'https://via.placeholder.com/80' },
-            { id: 4, name: 'Snack bim bim', price: 10000, quantity: 2, total: 20000, image: 'https://via.placeholder.com/80' },
-            { id: 6, name: 'Trà sữa trân châu', price: 26000, quantity: 1, total: 26000, image: 'https://via.placeholder.com/80' }
-          ]
-        };
-        
-        setOrder(mockOrder);
-        setLoading(false);
-      }, 1000);
-    } catch (err) {
-      console.error('Error fetching order details:', err);
-      message.error('Không thể tải thông tin đơn hàng');
+      console.log('Fetching order details for ID:', id);
+      setLoading(true);
+      setError(null);
+      const response = await orderService.getOrderById(id);
+      console.log('Order details response:', response);
+      
+      if (response && response.data) {
+        setOrder(response.data);
+        setNewStatus(response.data.orderStatus);
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('Error fetching order details:', error);
+      setError(error.response?.data?.message || 'Không thể tải thông tin đơn hàng');
+      message.error(error.response?.data?.message || 'Không thể tải thông tin đơn hàng');
+    } finally {
       setLoading(false);
-    }
-  };
-
-  const getStatusStep = (status) => {
-    switch (status) {
-      case 'pending': return 0;
-      case 'processing': return 1;
-      case 'shipping': return 2;
-      case 'completed': return 3;
-      case 'cancelled': return 4;
-      default: return 0;
     }
   };
 
@@ -92,7 +64,7 @@ const OrderDetail = () => {
   };
 
   const showStatusModal = () => {
-    setNewStatus(order.status);
+    setNewStatus(order.orderStatus);
     setIsStatusModalVisible(true);
   };
 
@@ -100,42 +72,58 @@ const OrderDetail = () => {
     setNewStatus(value);
   };
 
-  const updateOrderStatus = async () => {
-    setLoading(true);
+  const handleStatusUpdate = async () => {
     try {
-      // In real app, this would call an API to update the order status
-      setTimeout(() => {
-        // Add new status to history
-        const now = moment().format('YYYY-MM-DD HH:mm:ss');
-        let statusText = '';
-        
-        switch (newStatus) {
-          case 'pending': statusText = 'Đơn hàng đã được tạo'; break;
-          case 'processing': statusText = 'Đơn hàng đang được xử lý'; break;
-          case 'shipping': statusText = 'Đơn hàng đang được giao'; break;
-          case 'completed': statusText = 'Đơn hàng đã hoàn thành'; break;
-          case 'cancelled': statusText = 'Đơn hàng đã bị hủy'; break;
-          default: statusText = 'Cập nhật trạng thái đơn hàng';
-        }
-        
-        const updatedOrder = {
-          ...order,
-          status: newStatus,
-          statusHistory: [
-            ...order.statusHistory,
-            { status: newStatus, date: now, text: statusText }
-          ]
-        };
-        
-        setOrder(updatedOrder);
+      console.log('Updating order status:', { orderId: id, newStatus });
+      const response = await orderService.updateOrderStatus(id, newStatus);
+      if (response.data.success) {
+        message.success(response.data.message || 'Cập nhật trạng thái thành công');
         setIsStatusModalVisible(false);
-        setLoading(false);
-        message.success('Cập nhật trạng thái đơn hàng thành công');
-      }, 1000);
-    } catch (err) {
-      console.error('Error updating order status:', err);
-      message.error('Không thể cập nhật trạng thái đơn hàng');
-      setLoading(false);
+        setOrder(response.data.data);
+      } else {
+        throw new Error(response.data.message || 'Cập nhật trạng thái thất bại');
+      }
+    } catch (error) {
+      console.error('Error updating order status:', error);
+      message.error(error.response?.data?.message || 'Cập nhật trạng thái thất bại');
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'gold';
+      case 'confirmed':
+        return 'purple';
+      case 'processing':
+        return 'blue';
+      case 'shipping':
+        return 'cyan';
+      case 'delivered':
+        return 'green';
+      case 'cancelled':
+        return 'red';
+      default:
+        return 'default';
+    }
+  };
+
+  const getStatusText = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'pending':
+        return 'Chờ xử lý';
+      case 'confirmed':
+        return 'Đã xác nhận';
+      case 'processing':
+        return 'Đang xử lý';
+      case 'shipping':
+        return 'Đang giao hàng';
+      case 'delivered':
+        return 'Đã giao hàng';
+      case 'cancelled':
+        return 'Đã hủy';
+      default:
+        return status;
     }
   };
 
@@ -165,173 +153,215 @@ const OrderDetail = () => {
     return <Tag color={color} icon={icon}>{text}</Tag>;
   };
 
-  const itemColumns = [
+  const columns = [
     {
       title: 'Sản phẩm',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text, record) => (
-        <div style={{ display: 'flex', alignItems: 'center' }}>
-          <img src={record.image} alt={text} style={{ width: 40, height: 40, marginRight: 10 }} />
-          <span>{text}</span>
-        </div>
-      )
+      dataIndex: ['snackId'],
+      key: 'snack',
+      render: (snack) => (
+        <Space>
+          <img 
+            src={snack.images} 
+            alt={snack.snackName} 
+            style={{ width: 50, height: 50, objectFit: 'cover' }} 
+          />
+          <Text>{snack.snackName}</Text>
+        </Space>
+      ),
     },
     {
-      title: 'Đơn giá',
+      title: 'Giá',
       dataIndex: 'price',
       key: 'price',
-      render: price => `${price.toLocaleString()}đ`,
-      align: 'right'
+      render: (price) => formatPrice(price),
     },
     {
       title: 'Số lượng',
       dataIndex: 'quantity',
       key: 'quantity',
-      align: 'center'
     },
     {
-      title: 'Thành tiền',
-      dataIndex: 'total',
+      title: 'Tổng',
       key: 'total',
-      render: total => `${total.toLocaleString()}đ`,
-      align: 'right'
-    }
+      render: (_, record) => formatPrice(record.price * record.quantity),
+    },
   ];
 
-  if (loading || !order) {
-    return <Card loading={true} />;
+  if (loading) {
+    return (
+      <Card>
+        <div style={{ textAlign: 'center', padding: '50px 0' }}>
+          <Steps.Step status="loading" title="Đang tải thông tin đơn hàng..." />
+        </div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <div style={{ textAlign: 'center', padding: '50px 0' }}>
+          <Title level={4} type="danger">{error}</Title>
+          <Button type="primary" onClick={() => navigate('/orders')} style={{ marginTop: 16 }}>
+            Quay lại danh sách
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  if (!order) {
+    return (
+      <Card>
+        <div style={{ textAlign: 'center', padding: '50px 0' }}>
+          <Title level={4}>Không tìm thấy thông tin đơn hàng</Title>
+          <Button type="primary" onClick={() => navigate('/orders')} style={{ marginTop: 16 }}>
+            Quay lại danh sách
+          </Button>
+        </div>
+      </Card>
+    );
   }
 
   return (
-    <>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-        <Title level={2}>Chi tiết đơn hàng #{order.id}</Title>
-        <Space>
-          <Button icon={<RollbackOutlined />} onClick={handleBack}>Quay lại</Button>
-          <Button type="primary" icon={<PrinterOutlined />} onClick={handlePrint}>In đơn hàng</Button>
-        </Space>
-      </div>
+    <div style={{ padding: '24px' }}>
+      <Space style={{ marginBottom: 16 }}>
+        <Button 
+          icon={<ArrowLeftOutlined />} 
+          onClick={handleBack}
+        >
+          Quay lại
+        </Button>
+        <Title level={4} style={{ margin: 0 }}>
+          Chi tiết đơn hàng #{order._id}
+        </Title>
+      </Space>
 
       <Row gutter={[16, 16]}>
-        <Col span={24}>
+        <Col span={16}>
           <Card title="Thông tin đơn hàng">
-            <Row gutter={[16, 16]}>
-              <Col xs={24} sm={12}>
-                <Descriptions column={1}>
-                  <Descriptions.Item label="Mã đơn hàng">{order.id}</Descriptions.Item>
-                  <Descriptions.Item label="Ngày đặt">{moment(order.date).format('DD/MM/YYYY HH:mm')}</Descriptions.Item>
-                  <Descriptions.Item label="Trạng thái">
-                    <Space>
-                      {getStatusTag(order.status)}
-                      <Button type="link" onClick={showStatusModal}>Cập nhật</Button>
-                    </Space>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Ghi chú">{order.notes || 'Không có'}</Descriptions.Item>
-                </Descriptions>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Descriptions column={1}>
-                  <Descriptions.Item label="Thanh toán">{order.paymentMethod === 'COD' ? 'Tiền mặt khi nhận hàng' : 'Chuyển khoản'}</Descriptions.Item>
-                  <Descriptions.Item label="Trạng thái thanh toán">
-                    <Tag color={order.paymentStatus === 'paid' ? 'green' : 'gold'}>
-                      {order.paymentStatus === 'paid' ? 'Đã thanh toán' : 'Chưa thanh toán'}
-                    </Tag>
-                  </Descriptions.Item>
-                </Descriptions>
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-
-        <Col xs={24} md={12}>
-          <Card title="Thông tin khách hàng">
-            <Descriptions column={1}>
-              <Descriptions.Item label="Họ tên">{order.customer.name}</Descriptions.Item>
-              <Descriptions.Item label="Số điện thoại">{order.customer.phone}</Descriptions.Item>
-              <Descriptions.Item label="Email">{order.customer.email}</Descriptions.Item>
-              <Descriptions.Item label="Địa chỉ">{order.customer.address}</Descriptions.Item>
+            <Descriptions column={2}>
+              <Descriptions.Item label="Mã đơn hàng">
+                {order._id}
+              </Descriptions.Item>
+              <Descriptions.Item label="Ngày đặt">
+                {moment(order.orderDate).format('DD/MM/YYYY HH:mm')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Trạng thái">
+                <Space>
+                  <Tag color={getStatusColor(order.orderStatus)}>
+                    {getStatusText(order.orderStatus)}
+                  </Tag>
+                  <Button 
+                    type="link" 
+                    onClick={() => setIsStatusModalVisible(true)}
+                  >
+                    Cập nhật
+                  </Button>
+                </Space>
+              </Descriptions.Item>
+              <Descriptions.Item label="Phương thức thanh toán">
+                {order.paymentMethod === 'COD' ? 'Thanh toán khi nhận hàng' : order.paymentMethod}
+              </Descriptions.Item>
             </Descriptions>
-          </Card>
-        </Col>
 
-        <Col xs={24} md={12}>
-          <Card title="Thông tin vận chuyển">
-            <Descriptions column={1}>
-              <Descriptions.Item label="Địa chỉ giao hàng">{order.customer.address}</Descriptions.Item>
-              <Descriptions.Item label="Phí vận chuyển">{order.shippingFee.toLocaleString()}đ</Descriptions.Item>
+            <Divider />
+
+            <Title level={5}>
+              <UserOutlined /> Thông tin khách hàng
+            </Title>
+            <Descriptions column={2}>
+              <Descriptions.Item label="Tên khách hàng">
+                {order.userId ? `${order.userId.firstName} ${order.userId.lastName}` : 'Khách vãng lai'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Email">
+                {order.userId?.email || 'N/A'}
+              </Descriptions.Item>
+              <Descriptions.Item label="Số điện thoại">
+                {order.userId?.phone || 'N/A'}
+              </Descriptions.Item>
             </Descriptions>
+
+            <Divider />
+
+            <Title level={5}>
+              <EnvironmentOutlined /> Địa chỉ giao hàng
+            </Title>
+            {order.addressId && (
+              <Descriptions column={1}>
+                <Descriptions.Item label="Địa chỉ">
+                  {`${order.addressId.specificAddress}, ${order.addressId.ward}, ${order.addressId.district}`}
+                </Descriptions.Item>
+                <Descriptions.Item label="Số điện thoại">
+                  {order.addressId.phone}
+                </Descriptions.Item>
+                {order.note && (
+                  <Descriptions.Item label="Ghi chú">
+                    {order.note}
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            )}
           </Card>
         </Col>
 
-        <Col span={24}>
-          <Card title="Chi tiết sản phẩm">
-            <Table 
-              columns={itemColumns} 
-              dataSource={order.items} 
-              rowKey="id" 
-              pagination={false}
-              summary={() => (
-                <Table.Summary>
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell colSpan={3}><Text strong>Tạm tính</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell align="right">
-                      <Text strong>{order.subtotal.toLocaleString()}đ</Text>
-                    </Table.Summary.Cell>
-                  </Table.Summary.Row>
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell colSpan={3}><Text>Phí vận chuyển</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell align="right">
-                      <Text>{order.shippingFee.toLocaleString()}đ</Text>
-                    </Table.Summary.Cell>
-                  </Table.Summary.Row>
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell colSpan={3}><Text strong>Tổng cộng</Text></Table.Summary.Cell>
-                    <Table.Summary.Cell align="right">
-                      <Text strong style={{ fontSize: '16px', color: '#ff4d4f' }}>{order.total.toLocaleString()}đ</Text>
-                    </Table.Summary.Cell>
-                  </Table.Summary.Row>
-                </Table.Summary>
-              )}
+        <Col span={8}>
+          <Card>
+            <Statistic
+              title="Tổng giá trị đơn hàng"
+              value={order.totalAmount}
+              formatter={(value) => formatPrice(value)}
             />
-          </Card>
-        </Col>
-
-        <Col span={24}>
-          <Card title="Lịch sử đơn hàng">
-            <Steps direction="vertical" current={getStatusStep(order.status)} status={order.status === 'cancelled' ? 'error' : 'process'}>
-              {order.statusHistory.map((history, index) => (
-                <Step 
-                  key={index} 
-                  title={(() => {
-                    switch (history.status) {
-                      case 'pending': return 'Chờ xử lý';
-                      case 'processing': return 'Đang xử lý';
-                      case 'shipping': return 'Đang giao hàng';
-                      case 'completed': return 'Hoàn thành';
-                      case 'cancelled': return 'Đã hủy';
-                      default: return history.status;
-                    }
-                  })()} 
-                  description={
-                    <div>
-                      {history.text}<br />
-                      <small>{moment(history.date).format('DD/MM/YYYY HH:mm:ss')}</small>
-                    </div>
-                  } 
-                />
-              ))}
-            </Steps>
+            <Divider />
+            <Descriptions column={1}>
+              <Descriptions.Item label="Tạm tính">
+              <span>
+                    {order.items
+                      .reduce((total, item) => total + (item.price * item.quantity), 0)
+                      .toLocaleString('vi-VN')}đ
+                  </span>
+              </Descriptions.Item>
+              <Descriptions.Item label="Phí vận chuyển">
+              <span>
+                    {order.addressId?.ward?.toLowerCase().includes('linh') ? 'Miễn phí' :
+                     (order.addressId?.ward?.toLowerCase().includes('hiep') || 
+                      order.addressId?.ward?.toLowerCase().includes('long') || 
+                      order.addressId?.ward?.toLowerCase().includes('phuoc') || 
+                      order.addressId?.ward?.toLowerCase().includes('phước')) ? '20,000đ' :
+                     '30,000đ'}
+                  </span>
+              </Descriptions.Item>
+              {order.discount > 0 && (
+                <Descriptions.Item label="Giảm giá">
+                  -{formatPrice(order.discount)}
+                </Descriptions.Item>
+              )}
+              <Descriptions.Item label="Tổng cộng">
+                <Text strong type="danger">
+                  {formatPrice(order.totalAmount || 0)}
+                </Text>
+              </Descriptions.Item>
+            </Descriptions>
           </Card>
         </Col>
       </Row>
 
+      <Card title="Chi tiết sản phẩm" style={{ marginTop: 16 }}>
+        <Table
+          columns={columns}
+          dataSource={order.items}
+          pagination={false}
+          rowKey={(record) => record.snackId._id}
+        />
+      </Card>
+
       <Modal
         title="Cập nhật trạng thái đơn hàng"
         visible={isStatusModalVisible}
-        onOk={updateOrderStatus}
+        onOk={handleStatusUpdate}
         onCancel={() => setIsStatusModalVisible(false)}
-        confirmLoading={loading}
+        okText="Cập nhật"
+        cancelText="Hủy"
       >
         <Select
           style={{ width: '100%' }}
@@ -339,13 +369,14 @@ const OrderDetail = () => {
           onChange={handleStatusChange}
         >
           <Option value="pending">Chờ xử lý</Option>
+          <Option value="confirmed">Đã xác nhận</Option>
           <Option value="processing">Đang xử lý</Option>
           <Option value="shipping">Đang giao hàng</Option>
-          <Option value="completed">Hoàn thành</Option>
+          <Option value="delivered">Đã giao hàng</Option>
           <Option value="cancelled">Đã hủy</Option>
         </Select>
       </Modal>
-    </>
+    </div>
   );
 };
 
