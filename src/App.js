@@ -16,6 +16,8 @@ import ProductForm from './pages/ProductForm';
 import Users from './pages/Users';
 import Orders from './pages/Orders';
 import OrderDetail from './pages/OrderDetail';
+import Coupons from './pages/Coupons';
+import CouponForm from './pages/CouponForm';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -63,6 +65,9 @@ function App() {
               <Route path="/users" element={<Users />} />
               <Route path="/orders" element={<Orders />} />
               <Route path="/orders/:id" element={<OrderDetail />} />
+              <Route path="/coupons" element={<Coupons />} />
+              <Route path="/coupons/add" element={<CouponForm />} />
+              <Route path="/coupons/edit/:id" element={<CouponForm />} />
             </Route>
           </Routes>
         </Router>

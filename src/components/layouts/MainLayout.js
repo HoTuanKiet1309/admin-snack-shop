@@ -13,6 +13,7 @@ import {
   SettingOutlined,
   BellOutlined,
   DownOutlined,
+  TagsOutlined,
 } from "@ant-design/icons"
 import { Outlet, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
@@ -49,6 +50,11 @@ const MainLayout = () => {
       key: "/orders",
       icon: <OrderedListOutlined />,
       label: "Đơn hàng",
+    },
+    {
+      key: "/coupons",
+      icon: <TagsOutlined />,
+      label: "Mã giảm giá",
     },
     {
       key: "/users",
