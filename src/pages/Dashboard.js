@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Row, Col, Card, Statistic, Table, Tag, message } from 'antd';
-import { ShoppingOutlined, UserOutlined, DollarOutlined, ShoppingCartOutlined } from '@ant-design/icons';
+import { Row, Col, Card, Statistic, Table, Tag, message, Select, Space, DatePicker } from 'antd';
+import { ShoppingOutlined, UserOutlined, DollarOutlined, ShoppingCartOutlined, CalendarOutlined } from '@ant-design/icons';
 import { dashboardService } from '../services/dashboardService';
 import { productService } from '../services/productService';
 import { orderService } from '../services/orderService';
+import moment from 'moment';
+
+const { Option } = Select;
+const { MonthPicker } = DatePicker;
 
 const Dashboard = () => {
   const [stats, setStats] = useState({
@@ -15,38 +19,119 @@ const Dashboard = () => {
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [timeRange, setTimeRange] = useState('all'); // 'all', 'month', 'year', 'custom'
+  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedYear, setSelectedYear] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [timeRange, selectedMonth, selectedYear]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
 
+      // Tạo tham số thời gian
+      const timeParams = {};
+      
+      if (timeRange === 'month' && selectedMonth) {
+        // Đảm bảo ngày bắt đầu là ngày đầu tiên của tháng ở múi giờ UTC+7
+        const startOfMonth = moment(selectedMonth).startOf('month').utcOffset(7);
+        const endOfMonth = moment(selectedMonth).endOf('month').utcOffset(7);
+        
+        // Format ngày theo ISO string
+        timeParams.startDate = startOfMonth.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        timeParams.endDate = endOfMonth.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        
+        console.log('Lọc theo tháng:', {
+          selectedMonth: selectedMonth.format('MM/YYYY'),
+          startDate: timeParams.startDate,
+          endDate: timeParams.endDate,
+          startLocal: startOfMonth.format('YYYY-MM-DD HH:mm:ss'),
+          endLocal: endOfMonth.format('YYYY-MM-DD HH:mm:ss'),
+          startUTC: startOfMonth.utc().format('YYYY-MM-DD HH:mm:ss'),
+          endUTC: endOfMonth.utc().format('YYYY-MM-DD HH:mm:ss')
+        });
+      } else if (timeRange === 'year' && selectedYear) {
+        const startOfYear = moment(selectedYear).startOf('year').utcOffset(7);
+        const endOfYear = moment(selectedYear).endOf('year').utcOffset(7);
+        timeParams.startDate = startOfYear.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        timeParams.endDate = endOfYear.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        console.log('Lọc theo năm:', {
+          selectedYear: selectedYear.format('YYYY'),
+          startDate: timeParams.startDate,
+          endDate: timeParams.endDate,
+          startLocal: startOfYear.format('YYYY-MM-DD HH:mm:ss'),
+          endLocal: endOfYear.format('YYYY-MM-DD HH:mm:ss')
+        });
+      } else if (timeRange === 'current-month') {
+        const now = moment().utcOffset(7);
+        const startOfMonth = now.clone().startOf('month');
+        const endOfMonth = now.clone().endOf('month');
+        timeParams.startDate = startOfMonth.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        timeParams.endDate = endOfMonth.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        console.log('Lọc theo tháng hiện tại:', {
+          startDate: timeParams.startDate,
+          endDate: timeParams.endDate,
+          startLocal: startOfMonth.format('YYYY-MM-DD HH:mm:ss'),
+          endLocal: endOfMonth.format('YYYY-MM-DD HH:mm:ss')
+        });
+      } else if (timeRange === 'current-year') {
+        const now = moment().utcOffset(7);
+        const startOfYear = now.clone().startOf('year');
+        const endOfYear = now.clone().endOf('year');
+        timeParams.startDate = startOfYear.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        timeParams.endDate = endOfYear.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        console.log('Lọc theo năm hiện tại:', {
+          startDate: timeParams.startDate,
+          endDate: timeParams.endDate,
+          startLocal: startOfYear.format('YYYY-MM-DD HH:mm:ss'),
+          endLocal: endOfYear.format('YYYY-MM-DD HH:mm:ss')
+        });
+      }
+
       // Fetch products
       const productsResponse = await productService.getAllProducts();
       
-      // Fetch orders
+      // Fetch top selling products from completed orders with time range
+      const completedStatsResponse = await orderService.getCompletedOrdersStatistics(timeParams);
+      console.log('API response completed stats:', completedStatsResponse);
+      
+      // Fetch orders with time range - chỉ sử dụng để hiển thị đơn hàng gần đây
       const ordersResponse = await orderService.getAllOrders({
-        limit: 10
+        limit: 10,
+        ...timeParams
       });
+      console.log('API response orders:', ordersResponse);
+      console.log('API time params:', timeParams);
 
       // Tính toán thống kê
       const products = productsResponse.data || [];
       const orders = ordersResponse.data || [];
       
-      const totalRevenue = orders.reduce((sum, order) => 
-        sum + (order.totalAmount || 0), 0);
+      // Lấy dữ liệu thống kê từ API
+      if (completedStatsResponse?.data?.success) {
+        const { totalRevenue, totalCompletedOrders, topProducts: topSellingProducts } = completedStatsResponse.data.data;
+        
+        setStats({
+          totalRevenue: totalRevenue || 0,
+          totalOrders: totalCompletedOrders || 0,
+          totalProducts: products.length,
+          totalCustomers: 0 // Sẽ cập nhật khi có API users
+        });
+        
+        // Lấy top sản phẩm bán chạy từ API
+        setTopProducts(topSellingProducts || []);
+      } else {
+        setStats({
+          totalRevenue: 0,
+          totalOrders: 0,
+          totalProducts: products.length,
+          totalCustomers: 0
+        });
+        setTopProducts([]);
+      }
 
-      setStats({
-        totalRevenue,
-        totalOrders: orders.length,
-        totalProducts: products.length,
-        totalCustomers: 0 // Sẽ cập nhật khi có API users
-      });
-
-      setTopProducts(products.slice(0, 5));
       setRecentOrders(orders);
 
     } catch (error) {
@@ -57,23 +142,72 @@ const Dashboard = () => {
     }
   };
 
+  const handleTimeRangeChange = (value) => {
+    setTimeRange(value);
+    
+    // Reset selected month/year if changing time range type
+    if (value === 'all') {
+      setSelectedMonth(null);
+      setSelectedYear(null);
+    }
+  };
+  
+  const handleMonthChange = (date) => {
+    console.log('Tháng được chọn:', date.format('MM/YYYY'));
+    
+    // Kiểm tra chi tiết về ngày tháng
+    console.log('Chi tiết ngày tháng:');
+    console.log('- Ngày đầy đủ (ISO):', date.toISOString());
+    console.log('- Format MM/YYYY:', date.format('MM/YYYY'));
+    console.log('- Ngày trong tháng:', date.date());
+    console.log('- Tháng (0-11):', date.month());
+    console.log('- Tháng hiển thị (1-12):', date.month() + 1);
+    console.log('- Năm:', date.year());
+    
+    // Debug thời gian thực tế
+    const startOfMonth = moment(date).startOf('month');
+    const endOfMonth = moment(date).endOf('month');
+    console.log('Ngày bắt đầu:', startOfMonth.format('YYYY-MM-DD'));
+    console.log('Ngày kết thúc:', endOfMonth.format('YYYY-MM-DD'));
+    
+    setSelectedMonth(date);
+    setTimeRange('month');
+  };
+  
+  const handleYearChange = (date) => {
+    setSelectedYear(date);
+    setTimeRange('year');
+  };
+
   const topProductColumns = [
     {
       title: 'Sản phẩm',
-      dataIndex: 'snackName',
-      key: 'snackName',
+      dataIndex: 'name',
+      key: 'name',
+      render: (name, record) => (
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          {record.image && (
+            <img 
+              src={record.image} 
+              alt={name} 
+              style={{ width: 40, height: 40, marginRight: 10, objectFit: 'cover' }} 
+            />
+          )}
+          {name || 'Sản phẩm không tên'}
+        </div>
+      )
     },
     {
       title: 'Đã bán',
-      dataIndex: 'quantity',
-      key: 'soldCount',
-      render: (soldCount) => soldCount || 0
+      dataIndex: 'totalSold',
+      key: 'totalSold',
+      render: (totalSold) => totalSold || 0
     },
     {
       title: 'Doanh thu',
-      dataIndex: 'revenue',
-      key: 'revenue',
-      render: (revenue) => `${(revenue || 0).toLocaleString('vi-VN')}đ`
+      dataIndex: 'totalRevenue',
+      key: 'totalRevenue',
+      render: (totalRevenue) => `${(totalRevenue || 0).toLocaleString('vi-VN')}đ`
     }
   ];
 
@@ -133,13 +267,84 @@ const Dashboard = () => {
     }
   ];
 
+  // Hiển thị tiêu đề phù hợp với khoảng thời gian đã chọn
+  const getTimeRangeTitle = () => {
+    if (timeRange === 'month' && selectedMonth) {
+      // Đảm bảo hiển thị đúng tháng đã chọn
+      const monthFormat = moment(selectedMonth).format('MM/YYYY');
+      console.log("Định dạng tiêu đề tháng:", monthFormat);
+      return `Tháng ${monthFormat}`;
+    } else if (timeRange === 'year' && selectedYear) {
+      return `Năm ${moment(selectedYear).format('YYYY')}`;
+    } else if (timeRange === 'current-month') {
+      return `Tháng ${moment().format('MM/YYYY')}`;
+    } else if (timeRange === 'current-year') {
+      return `Năm ${moment().format('YYYY')}`;
+    } else {
+      return 'Tất cả thời gian';
+    }
+  };
+
+  // Tạo danh sách năm để select (10 năm gần đây)
+  const getYearOptions = () => {
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = 0; i < 10; i++) {
+      years.push(currentYear - i);
+    }
+    return years;
+  };
+
   return (
     <div>
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col span={24}>
+          <Card>
+            <Space>
+              <span><CalendarOutlined /> Khoảng thời gian:</span>
+              <Select 
+                style={{ width: 150 }} 
+                onChange={handleTimeRangeChange}
+                value={timeRange}
+              >
+                <Option value="all">Tất cả</Option>
+                <Option value="current-month">Tháng này</Option>
+                <Option value="current-year">Năm nay</Option>
+                <Option value="month">Tháng cụ thể</Option>
+                <Option value="year">Năm cụ thể</Option>
+              </Select>
+              
+              {timeRange === 'month' && (
+                <DatePicker
+                  picker="month"
+                  placeholder="Chọn tháng"
+                  format="MM/YYYY"
+                  value={selectedMonth}
+                  onChange={handleMonthChange}
+                  allowClear={false}
+                />
+              )}
+              
+              {timeRange === 'year' && (
+                <DatePicker
+                  picker="year"
+                  placeholder="Chọn năm"
+                  format="YYYY"
+                  value={selectedYear}
+                  onChange={handleYearChange}
+                  allowClear={false}
+                />
+              )}
+            </Space>
+          </Card>
+        </Col>
+      </Row>
+
       <Row gutter={16}>
         <Col span={6}>
           <Card>
             <Statistic
-              title="Tổng doanh thu"
+              title={`Doanh thu (${getTimeRangeTitle()})`}
               value={stats.totalRevenue}
               prefix={<DollarOutlined />}
               suffix="đ"
@@ -150,7 +355,7 @@ const Dashboard = () => {
         <Col span={6}>
           <Card>
             <Statistic
-              title="Tổng đơn hàng"
+              title={`Đơn hoàn thành (${getTimeRangeTitle()})`}
               value={stats.totalOrders}
               prefix={<ShoppingCartOutlined />}
             />
@@ -178,7 +383,7 @@ const Dashboard = () => {
 
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={12}>
-          <Card title="Top sản phẩm bán chạy">
+          <Card title={`Top sản phẩm bán chạy (${getTimeRangeTitle()})`}>
             <Table
               columns={topProductColumns}
               dataSource={topProducts}
@@ -189,7 +394,7 @@ const Dashboard = () => {
           </Card>
         </Col>
         <Col span={12}>
-          <Card title="Đơn hàng gần đây">
+          <Card title={`Đơn hàng gần đây (${getTimeRangeTitle()})`}>
             <Table
               columns={recentOrderColumns}
               dataSource={recentOrders.slice(0, 5)}

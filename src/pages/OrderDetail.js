@@ -6,7 +6,8 @@ import {
 import {
   ShoppingOutlined, CheckCircleOutlined, ClockCircleOutlined, 
   CloseCircleOutlined, RollbackOutlined, PrinterOutlined,
-  ArrowLeftOutlined, UserOutlined, EnvironmentOutlined
+  ArrowLeftOutlined, UserOutlined, EnvironmentOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +28,7 @@ const OrderDetail = () => {
   const [error, setError] = useState(null);
   const [isStatusModalVisible, setIsStatusModalVisible] = useState(false);
   const [newStatus, setNewStatus] = useState('');
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   useEffect(() => {
     fetchOrderDetails();
@@ -89,6 +91,23 @@ const OrderDetail = () => {
     }
   };
 
+  const handleSendEmail = async () => {
+    try {
+      setSendingEmail(true);
+      const response = await orderService.sendOrderEmail(id);
+      if (response.data.success) {
+        message.success('Đã gửi email thông báo cho khách hàng');
+      } else {
+        throw new Error(response.data.message || 'Không thể gửi email');
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      message.error(error.response?.data?.message || 'Không thể gửi email');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case 'pending':
@@ -101,6 +120,8 @@ const OrderDetail = () => {
         return 'cyan';
       case 'delivered':
         return 'green';
+      case 'completed':
+        return 'success';
       case 'cancelled':
         return 'red';
       default:
@@ -119,7 +140,7 @@ const OrderDetail = () => {
       case 'shipping':
         return 'Đang giao hàng';
       case 'delivered':
-        return 'Đã giao hàng';
+        return 'Đã hoàn thành';
       case 'cancelled':
         return 'Đã hủy';
       default:
@@ -148,6 +169,10 @@ const OrderDetail = () => {
       color = 'red';
       text = 'Đã hủy';
       icon = <CloseCircleOutlined />;
+    } else if (status === 'completed') {
+      color = 'success';
+      text = 'Đã hoàn thành';
+      icon = <CheckCircleOutlined />;
     }
     
     return <Tag color={color} icon={icon}>{text}</Tag>;
@@ -267,9 +292,24 @@ const OrderDetail = () => {
 
             <Divider />
 
-            <Title level={5}>
-              <UserOutlined /> Thông tin khách hàng
-            </Title>
+            <Row justify="space-between" align="middle">
+              <Col>
+                <Title level={5}>
+                  <UserOutlined /> Thông tin khách hàng
+                </Title>
+              </Col>
+              <Col>
+                <Button
+                  type="primary"
+                  icon={<MailOutlined />}
+                  loading={sendingEmail}
+                  onClick={handleSendEmail}
+                >
+                  Gửi email thông báo
+                </Button>
+              </Col>
+            </Row>
+            
             <Descriptions column={2}>
               <Descriptions.Item label="Tên khách hàng">
                 {order.userId ? `${order.userId.firstName} ${order.userId.lastName}` : 'Khách vãng lai'}
@@ -372,7 +412,7 @@ const OrderDetail = () => {
           <Option value="confirmed">Đã xác nhận</Option>
           <Option value="processing">Đang xử lý</Option>
           <Option value="shipping">Đang giao hàng</Option>
-          <Option value="delivered">Đã giao hàng</Option>
+          <Option value="delivered">Đã hoàn thành</Option>
           <Option value="cancelled">Đã hủy</Option>
         </Select>
       </Modal>
