@@ -1,70 +1,99 @@
-# Getting Started with Create React App
+# SnackHub Admin Dashboard
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Admin dashboard cho hệ thống bán hàng SnackHub, được xây dựng với React và Ant Design.
 
-## Available Scripts
+## Công nghệ sử dụng
 
-In the project directory, you can run:
+- React 18
+- Ant Design cho UI components
+- Material UI cho additional components
+- Chart.js cho data visualization
+- React Router cho routing
+- Axios cho API calls
+- i18next cho internationalization
+- Moment.js cho date handling
+- Cloudinary cho image management
 
-### `npm start`
+## Cài đặt
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```bash
+# Cài đặt dependencies
+npm install
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+# Chạy development server
+npm start
 
-### `npm test`
+# Build cho production
+npm run build
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+# Chạy tests
+npm test
+```
 
-### `npm run build`
+## Cấu trúc thư mục
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```
+src/
+├── components/     # Reusable components
+├── pages/         # Page components
+├── layouts/       # Layout components
+├── services/      # API services
+├── hooks/         # Custom hooks
+├── utils/         # Utility functions
+├── assets/        # Static assets
+├── locales/       # Translation files
+└── styles/        # Global styles
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Tính năng chính
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### Quản lý sản phẩm
+- Thêm/Sửa/Xóa sản phẩm
+- Quản lý danh mục
+- Upload hình ảnh
+- Quản lý tồn kho
 
-### `npm run eject`
+### Quản lý đơn hàng
+- Xem danh sách đơn hàng
+- Cập nhật trạng thái đơn hàng
+- Xem chi tiết đơn hàng
+- In hóa đơn
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Quản lý người dùng
+- Xem danh sách người dùng
+- Quản lý quyền truy cập
+- Xem lịch sử đơn hàng của người dùng
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+### Thống kê và báo cáo
+- Doanh thu theo thời gian
+- Sản phẩm bán chạy
+- Thống kê người dùng
+- Báo cáo tồn kho
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Cài đặt hệ thống
+- Cấu hình website
+- Quản lý khuyến mãi
+- Cài đặt thanh toán
+- Quản lý email templates
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## Môi trường phát triển
 
-## Learn More
+Tạo file `.env` với các biến môi trường sau:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+```
+REACT_APP_API_URL=http://localhost:5000
+REACT_APP_CLOUDINARY_CLOUD_NAME=your_cloud_name
+REACT_APP_CLOUDINARY_UPLOAD_PRESET=your_upload_preset
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Contributing
 
-### Code Splitting
+1. Fork repository
+2. Tạo branch mới (`git checkout -b feature/AmazingFeature`)
+3. Commit thay đổi (`git commit -m 'Add some AmazingFeature'`)
+4. Push lên branch (`git push origin feature/AmazingFeature`)
+5. Tạo Pull Request
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## License
 
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Dự án này được phát triển cho mục đích học tập và nghiên cứu.
